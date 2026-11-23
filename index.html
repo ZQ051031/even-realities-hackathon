@@ -3,33 +3,56 @@
   <head>
     <meta charset="UTF-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, minimum-scale=1.0, user-scalable=no" />
-    <title>Even Hub Minimal</title>
+    <title>Glance - heads-up assistant for Even G2</title>
     <style>
+      :root { --g: #4dff6a; }
       html, body {
         margin: 0;
-        height: 100%;
-        /* ER brand dark-theme surface (#232323) + Neutral-200 text (#E5E5E5). */
-        background: #232323;
-        color: #E5E5E5;
-        font: 14px/1.4 -apple-system, BlinkMacSystemFont, system-ui, sans-serif;
-        /* Kill WebView zoom + iOS auto-sizing + rubber-band scroll. */
+        min-height: 100%;
+        background: #1b1b1b;
+        color: #e5e5e5;
+        font: 15px/1.45 -apple-system, BlinkMacSystemFont, system-ui, sans-serif;
         touch-action: manipulation;
         -webkit-text-size-adjust: 100%;
         overscroll-behavior: none;
       }
-      #app {
-        display: flex;
-        height: 100%;
-        align-items: center;
-        justify-content: center;
-        padding: 24px;
-        box-sizing: border-box;
-        text-align: center;
-      }
+      main { display: flex; flex-wrap: wrap; gap: 24px; padding: 20px; justify-content: center; align-items: flex-start; }
+      body.evenhub #mock { display: none; }
+      #mock { flex: 0 0 auto; }
+      .glasses { padding: 14px; background: #000; border-radius: 18px; box-shadow: 0 0 0 2px #333; }
+      .screen { position: relative; width: 576px; height: 288px; background: #000; color: var(--g); overflow: hidden;
+        font: 19px/27px "Helvetica Neue", Arial, sans-serif; }
+      .screen .c { position: absolute; box-sizing: border-box; white-space: pre-wrap; overflow: hidden; }
+      .screen .list .item { padding: 2px 8px; margin-bottom: 4px; height: 30px; box-sizing: border-box; border: 1px solid transparent; border-radius: 6px; white-space: nowrap; overflow: hidden; }
+      .screen .item.sel { border-color: var(--g); }
+      .screen .menu { right: 0; top: 0; width: 300px; height: 288px; background: #000; border-left: 1px solid var(--g); padding: 10px; }
+      .screen .menu .item { padding: 1px 8px; border: 1px solid transparent; border-radius: 6px; margin-bottom: 2px; }
+      .screen .menu .sys { opacity: .5; }
+      .screen .exit { inset: 0; padding: 40px; text-align: center; }
+      .pad { display: grid; grid-template-columns: repeat(3, 1fr); gap: 8px; margin-top: 12px; max-width: 604px; }
+      button { background: #2c2c2c; color: #e5e5e5; border: 1px solid #444; border-radius: 8px; padding: 9px 12px; font: inherit; cursor: pointer; }
+      button:hover { border-color: var(--g); }
+      .keys { color: #888; font-size: 13px; margin: 8px 0 0; }
+      #companion { flex: 1 1 320px; max-width: 460px; }
+      #companion h1 { margin: 0 0 4px; font-size: 22px; }
+      #companion h1 small { color: #888; font-weight: normal; font-size: 14px; }
+      #companion h2 { font-size: 15px; margin: 18px 0 6px; color: var(--g); }
+      #companion form { display: flex; flex-wrap: wrap; gap: 6px; }
+      #companion input, #companion select { background: #111; color: #eee; border: 1px solid #444; border-radius: 8px; padding: 8px; font: inherit; }
+      #companion input[name=text], #companion input[name=url] { flex: 1 1 180px; }
+      #companion input[type=number] { width: 60px; }
+      #companion ul { padding-left: 18px; }
+      #companion li button { padding: 0 6px; margin-left: 4px; }
+      .status { color: #aaa; font-size: 13px; }
+      .hint { color: #888; font-size: 13px; }
+      code { color: #cfc; }
     </style>
   </head>
   <body>
-    <div id="app">Companion app is running. Check the glasses display.</div>
+    <main>
+      <div id="mock"></div>
+      <div id="companion">Starting Glance...</div>
+    </main>
     <script type="module" src="/src/main.ts"></script>
   </body>
 </html>

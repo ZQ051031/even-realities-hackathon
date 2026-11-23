@@ -7,8 +7,10 @@
     "dev": "vite",
     "build": "tsc --noEmit && vite build",
     "preview": "vite preview",
-    "pack": "npm run build && evenhub pack app.json dist",
-    "simulate": "evenhub-simulator http://localhost:5173"
+    "test": "TZ=Asia/Hong_Kong vitest run",
+    "simulate": "evenhub-simulator http://localhost:5173",
+    "agenda-server": "node server/standalone.ts",
+    "pack": "npm run build && evenhub pack app.json dist"
   },
   "dependencies": {
     "@evenrealities/even_hub_sdk": "^0.0.16"
@@ -16,8 +18,10 @@
   "devDependencies": {
     "@evenrealities/evenhub-cli": "^0.2.0",
     "@evenrealities/evenhub-simulator": "^0.9.5",
+    "@types/node": "^22.20.5",
     "typescript": "^5.9.3",
-    "vite": "^5.4.21"
+    "vite": "^5.4.21",
+    "vitest": "^3.2.7"
   },
   "description": "Heads-up assistant for Even Realities G2 (Even Hub)"
 }
