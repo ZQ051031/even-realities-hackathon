@@ -1,9 +1,13 @@
 import { defineConfig, loadEnv } from 'vite'
 import { configFromEnv } from './server/agenda.ts'
-import { agendaPlugin } from './server/vite-plugin.ts'
+import { sttFromEnv } from './server/transcribe.ts'
+import { glancePlugin } from './server/vite-plugin.ts'
 
-export default defineConfig(({ mode }) => ({
-  server: { host: true, port: 5173 },
-  build: { target: 'esnext' },
-  plugins: [agendaPlugin(configFromEnv({ ...process.env, ...loadEnv(mode, process.cwd(), 'GLANCE_') }))],
-}))
+export default defineConfig(({ mode }) => {
+  const env = { ...process.env, ...loadEnv(mode, process.cwd(), 'GLANCE_') }
+  return {
+    server: { host: true, port: 5173 },
+    build: { target: 'esnext' },
+    plugins: [glancePlugin(configFromEnv(env), sttFromEnv(env))],
+  }
+})

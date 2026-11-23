@@ -19,7 +19,7 @@ async function boot() {
   document.body.classList.add(bridge ? 'evenhub' : 'mock')
   const renderer = bridge ? new EvenHubRenderer(bridge) : new MockRenderer(document.getElementById('mock')!)
   const app = new Glance(renderer, bridge ? bridgeKV(bridge) : webKV)
-  await app.start()
+  await app.start({ reset: new URLSearchParams(location.search).has('reset') })
   mountCompanion(document.getElementById('companion')!, app)
   ;(window as unknown as { glance: Glance }).glance = app
 }

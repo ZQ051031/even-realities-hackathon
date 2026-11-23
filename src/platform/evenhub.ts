@@ -1,7 +1,13 @@
-import { OsEventTypeList, TextContainerUpgrade, type EvenAppBridge, type EvenHubEvent } from '@evenrealities/even_hub_sdk'
+import {
+  AudioInputSource,
+  OsEventTypeList,
+  TextContainerUpgrade,
+  type EvenAppBridge,
+  type EvenHubEvent,
+} from '@evenrealities/even_hub_sdk'
 import type { Input } from '../core/types'
 import type { Page } from '../core/page'
-import type { Renderer } from './renderer'
+import type { Mic, Renderer } from './renderer'
 import { toRebuild, toStartUp } from './containers'
 
 /** CLICK_EVENT is 0 and is often omitted from the payload, so a present envelope without a type is a click. */
@@ -41,14 +47,39 @@ export class EvenHubRenderer implements Renderer {
   private current: Page | null = null
   private queue: Promise<unknown> = Promise.resolve()
   private unsubscribe: (() => void) | null = null
+  private onPcm: ((pcm: Uint8Array) => void) | null = null
 
-  constructor(private bridge: EvenAppBridge) {}
+  constructor(
+    private bridge: EvenAppBridge,
+    private audioSource: AudioInputSource = AudioInputSource.Glasses,
+  ) {}
+
+  /** Glasses microphone via audioControl; PCM arrives as audioEvent on the event stream. */
+  readonly mic: Mic = {
+    start: async onPcm => {
+      this.onPcm = onPcm
+      const ok = await this.enqueue(() => this.bridge.audioControl(true, this.audioSource))
+      if (!ok) {
+        this.onPcm = null
+        throw new Error('Microphone unavailable')
+      }
+    },
+    stop: async () => {
+      if (!this.onPcm) return
+      this.onPcm = null
+      await this.enqueue(() => this.bridge.audioControl(false))
+    },
+  }
+
+  private enqueue<T>(fn: () => Promise<T>): Promise<T> {
+    const run = this.queue.then(fn)
+    this.queue = run.catch(err => console.error('[glance] bridge call failed', err))
+    return run
+  }
 
   /** Serialised: page calls go over BLE and must not overlap. */
   show(page: Page): Promise<void> {
-    const run = this.queue.then(() => this.apply(page))
-    this.queue = run.catch(err => console.error('[glance] render failed', err))
-    return run
+    return this.enqueue(() => this.apply(page))
   }
 
   private async apply(page: Page) {
@@ -74,6 +105,12 @@ export class EvenHubRenderer implements Renderer {
   onInput(cb: (input: Input) => void) {
     this.unsubscribe?.()
     this.unsubscribe = this.bridge.onEvenHubEvent(event => {
+      const audio = event.audioEvent
+      if (audio) {
+        const pcm = audio.audioPcm instanceof Uint8Array ? audio.audioPcm : Uint8Array.from(audio.audioPcm as ArrayLike<number>)
+        this.onPcm?.(pcm)
+        return
+      }
       const t = event.sysEvent?.eventType
       if (t === OsEventTypeList.SYSTEM_EXIT_EVENT || t === OsEventTypeList.ABNORMAL_EXIT_EVENT) {
         this.unsubscribe?.()

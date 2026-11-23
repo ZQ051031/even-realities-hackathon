@@ -13,6 +13,8 @@ const fresh = (): State => initialState(agenda(), demoReminders(T0))
 const run = (s: State, inputs: Input['kind'][], now = T0) =>
   inputs.reduce((acc, k) => dispatch(acc, { kind: k } as Input, now)[0], s)
 
+const box = (page: ReturnType<typeof view>, name: string) => page.texts.find(t => t.name === name)!.content
+
 function expectValid(s: State, now: number) {
   const page = view(s, now)
   expect(validatePage(page)).toEqual([])
@@ -26,12 +28,13 @@ function expectValid(s: State, now: number) {
 
 describe('Glance state machine', () => {
   it('starts on the NOW card with the next event and reminder', () => {
-    const body = view(fresh(), T0).texts.find(t => t.name === 'body')!.content
-    expect(body).toContain('NEXT  10:20  Design review')
+    const body = box(view(fresh(), T0), 'body')
+    expect(body).toContain('NEXT · in 20 min')
+    expect(body).toContain('10:20  Design review')
     expect(body).toContain('in 20 min')
-    expect(body).toContain('THEN  12:15  Lunch with Sam')
+    expect(body).toContain('then   12:15  Lunch with Sam')
     expect(body).toContain('Stretch & drink water')
-    expect(view(fresh(), T0).texts[0].content).toContain('DEMO')
+    expect(box(view(fresh(), T0), 'hdr')).toContain('DEMO')
   })
 
   it('cycles cards with swipes and goes home / exits on double tap', () => {
@@ -48,19 +51,19 @@ describe('Glance state machine', () => {
     let s = run(fresh(), ['down', 'down', 'tap'])
     expect(s.card).toBe('focus')
     expect(s.focus.startedAt).toBe(T0)
-    expect(view(s, T0 + 60_000).texts[0].content).toContain('▶ 24:00')
+    expect(box(view(s, T0 + 60_000), 'clock')).toContain('▶ 24:00')
     ;[s] = tick({ ...s, reminders: [] , agenda: { ...s.agenda, events: [] } }, T0 + 25 * MIN)
     expect(s.focus.phase).toBe('break')
     expect(s.alert?.kind).toBe('focus')
-    expect(view(s, T0 + 25 * MIN).texts[1].content).toContain('FOCUS SESSION DONE')
+    expect(box(view(s, T0 + 25 * MIN), 'body')).toContain('FOCUS SESSION DONE')
   })
 
   it('steps through route cards for the next event', () => {
     let s = run(fresh(), ['tap'])
     expect(s.card).toBe('go')
-    expect(view(s, T0).texts[1].content).toContain('STEP 1/4')
+    expect(box(view(s, T0), 'body')).toContain('STEP 1 of 4')
     s = run(s, ['tap', 'tap', 'tap', 'tap'])
-    expect(view(s, T0).texts[1].content).toContain('You have arrived')
+    expect(box(view(s, T0), 'body')).toContain('You have arrived')
     s = run(s, ['tap'])
     expect(s.goStep).toBe(0)
   })
@@ -72,7 +75,7 @@ describe('Glance state machine', () => {
     expect(page.list?.items[0]).toContain('Design review')
     ;[s] = dispatch(s, { kind: 'select', index: 1 }, T0)
     expect(s.card).toBe('go')
-    expect(view(s, T0).texts[1].content).toContain('Lunch with Sam')
+    expect(box(view(s, T0), 'body')).toContain('Lunch with Sam')
     expect(pickable(s, T0).length).toBe(4)
     expect(pickable(s, T0 + 12 * 60 * MIN).length).toBe(5)
   })

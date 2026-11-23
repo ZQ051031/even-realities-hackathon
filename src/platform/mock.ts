@@ -1,6 +1,6 @@
 import type { Input } from '../core/types'
 import type { Page } from '../core/page'
-import type { Renderer } from './renderer'
+import type { Mic, Renderer } from './renderer'
 
 /**
  * Browser stand-in for the G2 display: draws the same containers at 576x288 in green on black
@@ -108,6 +108,9 @@ export class MockRenderer implements Renderer {
     this.screen.innerHTML = parts.join('')
   }
 
+  /** Browser microphone resampled to the glasses' 16 kHz s16le format, so the same voice pipeline runs. */
+  readonly mic: Mic = browserMic()
+
   onInput(cb: (input: Input) => void) {
     this.cb = cb
   }
@@ -119,3 +122,42 @@ export class MockRenderer implements Renderer {
 }
 
 const esc = (s: string) => s.replace(/[&<>"]/g, c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;' })[c]!)
+
+function browserMic(): Mic {
+  let stop: (() => void) | null = null
+  return {
+    async start(onPcm) {
+      if (!navigator.mediaDevices?.getUserMedia) throw new Error('No microphone in this browser')
+      const stream = await navigator.mediaDevices.getUserMedia({ audio: { channelCount: 1, echoCancellation: true, noiseSuppression: true } })
+      const ctx = new AudioContext({ sampleRate: 16_000 })
+      if (ctx.state === 'suspended') await ctx.resume()
+      const src = ctx.createMediaStreamSource(stream)
+      const proc = ctx.createScriptProcessor(2048, 1, 1)
+      let acc: number[] = []
+      proc.onaudioprocess = e => {
+        const f = e.inputBuffer.getChannelData(0)
+        for (const x of f) acc.push(Math.max(-1, Math.min(1, x)))
+        while (acc.length >= 1600) {
+          const frame = acc.slice(0, 1600)
+          acc = acc.slice(1600)
+          const pcm = new Uint8Array(3200)
+          const v = new DataView(pcm.buffer)
+          frame.forEach((x, i) => v.setInt16(i * 2, Math.round(x * 32767), true))
+          onPcm(pcm)
+        }
+      }
+      src.connect(proc)
+      proc.connect(ctx.destination)
+      stop = () => {
+        proc.disconnect()
+        src.disconnect()
+        stream.getTracks().forEach(t => t.stop())
+        void ctx.close()
+      }
+    },
+    async stop() {
+      stop?.()
+      stop = null
+    },
+  }
+}

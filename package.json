@@ -10,7 +10,8 @@
     "test": "TZ=Asia/Hong_Kong vitest run",
     "simulate": "evenhub-simulator http://localhost:5173",
     "agenda-server": "node server/standalone.ts",
-    "pack": "npm run build && evenhub pack app.json dist"
+    "pack": "npm run build && evenhub pack app.json dist",
+    "demo": "node scripts/demo.ts"
   },
   "dependencies": {
     "@evenrealities/even_hub_sdk": "^0.0.16"

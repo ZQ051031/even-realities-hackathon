@@ -5,7 +5,12 @@
   "version": "0.1.0",
   "min_sdk_version": "0.0.16",
   "entrypoint": "index.html",
-  "permissions": [],
+  "permissions": [
+    {
+      "name": "g2-microphone",
+      "desc": "Glance records a short voice clip only while you hold on the NOW card to dictate a reminder; the audio goes to your own Glance server for speech-to-text."
+    }
+  ],
   "supported_languages": [
     "en"
   ]

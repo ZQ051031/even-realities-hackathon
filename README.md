@@ -6,23 +6,28 @@ Glance is a hands-free card deck for the G2 display (576×288, monochrome green)
 
 | Card | What you see | Tap | Hold |
 |---|---|---|---|
-| **NOW** | next event + countdown, the one after it, top reminder | route to next event | |
+| **NOW** | next event + countdown, location, progress of the current event, top reminder | route to next event | **voice reminder** |
 | **AGENDA** | today's timeline, `▶` marks now/next | pick an event (list), tap again to route to it | |
 | **FOCUS** | Pomodoro timer (25/5 by default), progress bar, sessions done | start / pause | reset |
-| **GO** | turn-by-turn style step cards to the event location (`STEP 1/3 ●○○`) | next step | restart route |
+| **GO** | turn-by-turn style step cards to the event location (`STEP 1 of 3 ●○○`) | next step | restart route |
 | **REMIND** | pending reminders with due times | mark the first one done | snooze 10 min |
 
 - **Swipe up/down** cycles cards. **Double tap** returns to NOW; a double tap on NOW exits (`shutDownPageContainer`).
 - **Heads-up alerts pop up by themselves**: a reminder that is due, an event starting in 5 minutes (tap opens its route), or a finished focus session (the break starts by itself). Tap = done/open, swipe = snooze/dismiss. Alerts close on their own after 20 s.
 - A running focus timer stays visible in the header on every card (`▶ 24:35`).
-- **Contextual menu** (system long-press): Start/pause focus, Snooze reminder 10m, Route to next event, Refresh agenda, Reset focus timer.
-- **Phone companion page** (the WebView's phone screen, or the right side of the browser demo): add/remove reminders, set focus/break minutes, set the calendar source, reset the demo.
+- **Voice reminders**: hold on NOW and say *"remind me to call mum in 20 minutes"*. Glance records from the glasses microphone, transcribes on your own server (offline `whisper.cpp` by default), shows the parsed reminder and saves it after 8 s unless you change it. See [Voice reminders](#voice-reminders).
+- **Contextual menu** (system long-press): Start/pause focus, Snooze reminder 10m, Route to next event, Refresh agenda, Reset focus timer, Voice reminder.
+- **Phone companion page** (the WebView's phone screen, or the right side of the browser demo): type or speak a voice reminder, add/remove reminders, set focus/break minutes, set the calendar source, reset the demo.
 
 ![NOW card](docs/sim-now.png) ![AGENDA card](docs/sim-agenda.png)
 ![GO card](docs/sim-go.png) ![FOCUS card](docs/sim-focus.png)
-![Reminder alert](docs/sim-reminder-alert.png) ![Contextual menu](docs/sim-menu.png)
+![Reminder alert](docs/sim-reminder-alert.png) ![Event alert](docs/sim-event-alert.png)
+![Voice: listening](docs/sim-voice-listen.png) ![Voice: confirm](docs/sim-voice-confirm.png)
+![Contextual menu](docs/sim-menu.png)
 
-*(Screenshots taken from the Even Hub simulator through its automation API.)*
+*(Screenshots from the Even Hub simulator, taken by `npm run demo`. The voice screens show a real transcription of spoken audio through the simulator's microphone path.)*
+
+**Layout.** Every card uses the same grid on the 576×288 display: a header (card name, card dots `●○○○○`, `DEMO` when the demo day is shown, and a clock box that hugs the right edge and also shows a running focus timer), one bordered body of at most 6 lines (the only event-capture container), and a dim footer that always says what tap / hold / swipe / double tap do right now. Text is clipped to fit and only uses glyphs the G2 font renders; the tests check every screen against the SDK's validator.
 
 ### Calendar data
 
@@ -57,7 +62,7 @@ GLANCE_ICS_URL='https://calendar.google.com/calendar/ical/.../basic.ics' npm run
 GLANCE_ICS_FILE=fixtures/sample-calendar.ics npm run dev
 ```
 
-Vite serves the app on http://localhost:5173 and mounts the agenda proxy at `/api/agenda`.
+Vite serves the app on http://localhost:5173 and mounts the agenda proxy at `/api/agenda` and the speech-to-text endpoint at `/api/transcribe`. To turn on voice reminders, also set the `GLANCE_WHISPER_*` variables below.
 
 ### 3. Open it in the Even Hub simulator
 
@@ -79,6 +84,36 @@ curl -X POST http://127.0.0.1:9898/api/input -H 'Content-Type: application/json'
 curl -o glasses.png http://127.0.0.1:9898/api/screenshot/glasses     # 576x288 PNG
 ```
 
+### Scripted demo (one command)
+
+```bash
+npm run demo                                   # Linux needs DISPLAY set, like the simulator itself
+npm run demo -- --pace 4 --keep                # slower, and leave the simulator open for recording
+npm run demo -- --voice tts                    # include the voice reminder, spoken by espeak-ng (Linux + PulseAudio)
+npm run demo -- --voice mic                    # include the voice reminder, you say it into your mic
+```
+
+`scripts/demo.ts` writes a demo calendar with times relative to now (`demo-out/demo.ics`), starts Vite and the simulator with its automation server (or attaches to ones already running on 5173/9898), then walks the whole app with ~3 s per step: the 5-minute event alert → GO route steps → NOW → AGENDA and the event picker → FOCUS → GO → REMIND → voice reminder → a due reminder popping up → done → contextual menu. Each step saves a screenshot to `demo-out/NN-step.png` and a line in `demo-out/captions.txt` (time, file, caption) for your voice-over. It takes about 75 s; nothing is uploaded. Voice needs speech-to-text configured (below), otherwise that step is skipped.
+
+### Voice reminders
+
+Flow: **hold on NOW** (or menu → Voice reminder, or **Speak** on the companion page) → `LISTENING` with a level meter → stop talking (or tap) → `TRANSCRIBING` → `NEW REMINDER` shows the parsed text and time. Tap saves, swipe moves it ±10 min, hold records again, double tap drops it. With no input it saves itself after 8 s, so it works hands-free.
+
+- **Audio:** on Even Hub, `bridge.audioControl(true, AudioInputSource.Glasses)` streams 16 kHz 16-bit PCM in `audioEvent`s. The browser demo uses the browser microphone instead. Glance detects the end of speech itself (adaptive noise floor, 1.2 s of silence, 10 s max), then posts a WAV to `/api/transcribe`.
+- **Speech-to-text runs on your Glance server, not on a cloud account by default.** Offline with [whisper.cpp](https://github.com/ggml-org/whisper.cpp) (no account, no key):
+
+  ```bash
+  git clone https://github.com/ggml-org/whisper.cpp ~/whisper.cpp && cd ~/whisper.cpp
+  cmake -B build && cmake --build build -j --config Release
+  sh ./models/download-ggml-model.sh base.en            # ~140 MB
+  cd -  # back to Glance
+  GLANCE_WHISPER_CMD=~/whisper.cpp/build/bin/whisper-cli \
+  GLANCE_WHISPER_MODEL=~/whisper.cpp/models/ggml-base.en.bin npm run dev
+  ```
+
+  Or any OpenAI-compatible `/audio/transcriptions` endpoint: `GLANCE_STT_URL=…` (`GLANCE_STT_KEY`, `GLANCE_STT_MODEL` optional). `GET /api/transcribe` reports which engine is on. Without either, the voice screen says speech-to-text is off; typing the sentence into the companion page's Voice reminder box still runs the same parser.
+- **What it understands:** "remind me to…", "don't forget to…", "I need to…", "note to self…" followed by `in 20 minutes` / `in an hour and a half` / `in half an hour` / `at 6 pm` / `at 9:30` / `at noon` / `tonight` / `tomorrow at 8`. No time means in 30 min (marked on the confirm screen).
+
 ### 4. Browser demo (no simulator)
 
 Open http://localhost:5173/?mock in any browser. A 576×288 mock of the G2 display shows next to the companion page.
@@ -88,7 +123,7 @@ Open http://localhost:5173/?mock in any browser. A 576×288 mock of the G2 displ
 | `↑` / `↓` | swipe |
 | `Enter` / `Space` | tap |
 | `Esc` / `Backspace` | double tap |
-| `L` | long press |
+| `L` | long press (on NOW: voice reminder) |
 | `M` | contextual menu |
 
 On-screen buttons do the same. Outside the Even Hub WebView, the mock is used automatically.
@@ -96,7 +131,8 @@ On-screen buttons do the same. Outside the Even Hub WebView, the mock is used au
 ### 5. Test, build and package
 
 ```bash
-npm test          # 23 unit tests (vitest): ICS parsing/recurrence, focus timer, state machine, SDK layout validation, event mapping, proxy
+npm test          # 47 tests (vitest): ICS parsing/recurrence, focus timer, state machine, voice parser, endpointing, WAV,
+                  # voice screens, STT server (fake whisper), controller mic capture, SDK layout validation, event mapping, proxy
 npm run build     # tsc --noEmit + vite build -> dist/
 npm run pack      # builds and packs out.ehpk with evenhub-cli (local only, nothing is uploaded)
 ```
@@ -120,11 +156,13 @@ src/core/        pure, testable logic: state machine + views (app.ts), ICS parse
 src/platform/    Even Hub renderer (create/rebuild/textContainerUpgrade over a serial queue), browser mock,
                  bridge-or-localStorage persistence, agenda loading with demo fallback, controller
 src/companion.ts phone-side settings UI
-server/          /api/agenda proxy (Vite plugin + standalone Node server)
+src/core/voice.ts reminder parser ("call mum in 20 minutes" -> text + due time), endpointer, WAV encoder
+server/          /api/agenda proxy and /api/transcribe speech-to-text (Vite plugin + standalone Node server)
+scripts/demo.ts  scripted simulator walkthrough (npm run demo)
 test/            vitest suites
 ```
 
-- Each card is 3 text containers: header, body (the single event-capture container) and footer hint. The agenda picker swaps in a native list container.
+- Each card is 4 text containers: header, clock, body (the single event-capture container) and footer hint. The agenda picker swaps in a native list container.
 - Card switches update text in place with `textContainerUpgrade`. A full `rebuildPageContainer` happens only when the layout changes (deck ↔ list), which keeps BLE traffic low.
 - State (reminders, focus timer) is saved with the bridge's `setLocalStorage`, so it survives an app restart.
 
@@ -144,7 +182,7 @@ This is commit `c27f1a9`, the first commit in this repo:
 - the official template `even-realities/evenhub-templates/minimal` (Vite + TypeScript + Even Hub SDK), copied unmodified, with only dependency versions bumped
 - `PLAN.md` (design notes written during research) and a README skeleton
 
-Everything else was written after the window opened on Nov 23: all of `src/` except the template entry, `server/`, `test/`, `fixtures/`, `docs/`, the UI and this README. Third-party code: only the npm dependencies in `package.json`.
+Everything else was written after the window opened on Nov 23: all of `src/` except the template entry, `server/`, `scripts/`, `test/`, `fixtures/`, `docs/`, the UI and this README. Third-party code: only the npm dependencies in `package.json`, plus whisper.cpp as an optional, separately installed speech-to-text tool (not vendored).
 
 ## DoraHacks submission notes (for the team; not submitted)
 
@@ -154,16 +192,17 @@ The submission and demo video are still to do. Nothing has been submitted to Dor
 - **Repo:** https://github.com/ZQ051031/even-realities-hackathon (public).
 - **One-liner:** "Glance turns your G2 into a hands-free day planner. Your next meeting, a focus timer, gentle reminders and step-by-step 'get there' cards, all one glance and one tap away."
 - **Demo video plan (2–3 min, simulator):**
-  1. NOW card with the countdown.
-  2. Swipe through AGENDA → FOCUS → GO → REMIND.
-  3. Tap to start focus and show the header timer on other cards.
-  4. Let a reminder pop up, tap done.
-  5. Show the 5-minute event alert opening the GO route.
-  6. Open the contextual menu.
-  7. Phone companion: add a reminder, then load the real calendar with `GLANCE_ICS_URL`.
-  8. Close with the hands-free design: one capture container, text-only cards, an alert that hides itself.
+  Run `npm run demo -- --voice mic --pace 4 --keep` and record the screen; `demo-out/captions.txt` has the timings. It shows:
+  1. The 5-minute event alert opening the GO route, stepping to "You have arrived".
+  2. NOW card with the countdown, then AGENDA and the event picker.
+  3. FOCUS started, the timer staying in the header on other cards.
+  4. Voice: hold, say "remind me to call mum in 20 minutes", the confirm card, saved in REMIND.
+  5. A reminder popping up by itself, tap done, then the contextual menu.
+  6. Afterwards, by hand: the phone companion (type a voice reminder, load a real calendar with `GLANCE_ICS_URL`).
+  7. Close with the hands-free design: one capture container, text-only cards, alerts and voice confirms that finish by themselves.
 - **Disclosure:** copy the "What existed before Nov 23" section above.
 - **Known limits:**
   - Tested in simulator v0.9.5 only, not on physical G2 hardware, so BLE timing and real fonts are not verified.
   - Simulator times use the host machine's clock and timezone.
+  - Voice was tested end to end in the simulator (speech played into its microphone input → whisper.cpp → saved reminder) and in unit tests; the browser-microphone path of the `?mock` demo was not tested with real audio. English only with the `base.en` model.
   - The `.ehpk` is not published to Even Hub; that needs a developer account.

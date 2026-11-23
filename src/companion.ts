@@ -8,6 +8,15 @@ export function mountCompanion(host: HTMLElement, app: Glance) {
     <h1>Glance <small>heads-up assistant</small></h1>
     <p class="status" data-status></p>
     <section>
+      <h2>Voice reminder</h2>
+      <form data-voice>
+        <input name="said" placeholder='e.g. "remind me to call mum in 20 minutes"' maxlength="120" required>
+        <button>Add</button>
+        <button type="button" data-mic>Speak</button>
+      </form>
+      <p class="hint" data-stt></p>
+    </section>
+    <section>
       <h2>Reminders</h2>
       <form data-reminder>
         <input name="text" placeholder="Reminder text" maxlength="60" required>
@@ -52,6 +61,13 @@ export function mountCompanion(host: HTMLElement, app: Glance) {
     app.addReminder(text.value, Number((f.elements.namedItem('mins') as HTMLSelectElement).value))
     text.value = ''
   })
+  $<HTMLFormElement>('[data-voice]').addEventListener('submit', e => {
+    e.preventDefault()
+    const said = (e.target as HTMLFormElement).elements.namedItem('said') as HTMLInputElement
+    app.voiceText(said.value)
+    said.value = ''
+  })
+  $('[data-mic]').addEventListener('click', () => app.handle({ kind: 'menu', id: 6 }))
   focusForm.addEventListener('submit', e => {
     e.preventDefault()
     app.setFocusLengths(
@@ -81,10 +97,15 @@ export function mountCompanion(host: HTMLElement, app: Glance) {
     const items = pendingReminders(s)
       .map(r => `<li>${hhmm(r.due)} · ${esc(r.text)} <small>${relative(r.due, now)}</small> <button data-del="${r.id}" aria-label="Delete">✕</button></li>`)
       .join('')
-    const html = status + '|' + items
+    const stt =
+      app.sttReady === null ? 'Checking speech-to-text..' : app.sttReady
+        ? 'Hold on the NOW card (or tap Speak) and say the reminder. Speech-to-text runs on your Glance server.'
+        : 'Speech-to-text is off (set GLANCE_WHISPER_CMD, see README). Typed reminders use the same parser.'
+    const html = status + '|' + items + '|' + stt
     if (html === last) return
     last = html
     $('[data-status]').textContent = status
+    $('[data-stt]').textContent = stt
     list.innerHTML = items || '<li><small>No pending reminders</small></li>'
   }
   app.subscribe(refresh)
